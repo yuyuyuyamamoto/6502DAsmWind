@@ -18,7 +18,7 @@ struct {
 
 typedef struct {
 	char Label[32];
-	unsigned int	adr;
+	unsigned int adr;
 } sLblTbl;
 
 sLblTbl LblTbl[2000];						/* ラベルテーブル構造 */
@@ -272,6 +272,11 @@ namespace My6502DAsmWin {
 			// openFileDialog1
 			// 
 			this->openFileDialog1->FileName = L"openFileDialog1";
+			// 
+			// saveFileDialog1
+			// 
+			this->saveFileDialog1->DefaultExt = L"Lst";
+			this->saveFileDialog1->Filter = L"Lstファイル|*.lst|Asmファイル|*.asm|全てのファイル|*.*";
 			// 
 			// tabControl1
 			// 
@@ -546,8 +551,8 @@ void Execute()
 	toolStripProgressBar1->Maximum = btmadr - topadr + 1;
 	toolStripProgressBar1->Value = 0;
 	statusStrip1->Update();		/* statusStripを再描画 */
-	linect = 1;					/* 行カウンタは1から */
-	lblct = 0;					/* ラベルテーブルクリア */
+	linect = 1;			/* 行カウンタは1から */
+	lblct = 0;			/* ラベルテーブルクリア */
 	adrct = topadr + ofsadr;	/* アドレスは先頭アドレスとオフセットアドレスの和 */
 	bct = topadr;				/* 逆アセンブルするデータは先頭アドレスからに入っている */
 	try {
@@ -689,7 +694,7 @@ int Pass1(int *binct)
 		ope.oplen = OpcodeTbl[opcode].oplen;
 		ope.optype = OpcodeTbl[opcode].optype;
 	}
-	
+
 	/* オペランド長(ope.oplen-1)に従ってオペランドを読み込む */
 	operand1 = 0;
 	operand2 = 0;
@@ -715,7 +720,7 @@ int Pass1(int *binct)
 	case  7: /*  7:Immediate							 7:#		1	*/
 	case  8: /*  8:Implied								 8:i		0	*/
 	case 10: /* 10:Stack								10:s 		0	*/
-		break;
+			break;
 	case 11: /* 11:Zero page							11:zp 		1	*/
 	case 12: /* 12:Zero page Indexed Indirect			12:(zp,x) 	1	*/
 	case 13: /* 13:Zero page Indexed with X				13:zp,x 	1	*/
@@ -723,14 +728,14 @@ int Pass1(int *binct)
 	case 15: /* 15:Zero Page Indirect					15:(zp) 	1	*/
 	case 16: /* 16:Zero Page Indirect Indexed with Y	16:(zp),y 	1	*/
 			MakeLabel(operand & 0xff);
-		break;
+			break;
 	case  1: /*  1:Absolute								 1:a		2	*/
 	case  2: /*  2:Absolute Indexed Indirect			 2:(a,x)	2	*/
 	case  3: /*  3:Absolute Indexed with X				 3:a,x		2	*/
 	case  4: /*  4:Absolute Indexed with Y				 4:a,y		2	*/
 	case  5: /*  5:Absolute Indirect					 5:(a)		2	*/
 			MakeLabel(operand & 0xffff);
-		break;
+			break;
 	case  9: /*  9:Program Counter Relative				 9:r		1	*/
 			/* Relative命令かどうか */
 			if (((opcode & 0x1f) == 0x10) || (opcode == 0x80)) {
@@ -1161,7 +1166,7 @@ int Pass2(int* binct)
 				sprintf_s(outbuf2, "\t%-5s\t$%02X%02X\r\n", ope.mnemonic, operand1, operand2);
 			}
 			break;
-		case  2: /*  2:Absolute Indexed Indirect			 2:(a,X)	2	*/
+		case  2: /*  2:Absolute Indexed Indirect			 2:(a,x)	2	*/
 			if ((lpt2 = GetLabel(operand))) {
 				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t(%-6s,X)\r\n",
 					linect, adrct, opcode, operand1, operand2, ope.mnemonic, lpt2->Label);
@@ -1805,9 +1810,34 @@ int LoadSFile(String^ FileName)
 /*==========================================================*/
 /*		Save File										*/
 /*==========================================================*/
-int SaveFile()
+int SaveFile(void)
 {
-   return 0;
+	if (txtBoxOutList->Text == System::String::Empty) {
+		toolStripStatusLabel1->Text = "No file to be saved!";
+	}
+
+	try {
+		saveFileDialog1->FileName = IO::Path::GetFileNameWithoutExtension(txtBoxFileName->Text);
+		saveFileDialog1->InitialDirectory = IO::Path::GetDirectoryName(txtBoxFileName->Text);
+		saveFileDialog1->FilterIndex = 1;
+		if (saveFileDialog1->ShowDialog() != System::Windows::Forms::DialogResult::OK)
+			return -1;
+	}
+	catch (Exception^) {
+		toolStripStatusLabel1->Text = "Invalid filename to be saved!";
+		return -1;
+	}
+
+	if (IO::Path::GetExtension(saveFileDialog1->FileName)->ToUpper() == ".LST") {
+		SaveListFile();
+	}
+	else if (IO::Path::GetExtension(saveFileDialog1->FileName)->ToUpper() == ".ASM") {
+		SaveAsmFile();
+	}
+	else
+		return -1;
+
+	return 0;
 }
 
 /*==========================================================*/
@@ -1815,7 +1845,52 @@ int SaveFile()
 /*==========================================================*/
 int SaveListFile(void)
 {
-   return 0;
+	int linct;
+	char orgstr[32];
+
+	if (!f_Lnosave) {
+		if (MessageBox::Show("ファイルは既に保存されています．\n保存しますか．", "File is already saved.",
+			MessageBoxButtons::YesNo, MessageBoxIcon::Asterisk) != System::Windows::Forms::DialogResult::Yes) {
+			return 0;
+		}
+	}
+
+	toolStripStatusLabel1->Text = "List file writing ...";
+	toolStripProgressBar1->Maximum = txtBoxOutList->TextLength;
+	toolStripProgressBar1->Value = 0;
+	lstBoxSkipArea->Focus();	/* Listの選択状態回避のためFocusを移動しておく */
+	this->Update();				// 全再描画
+
+	try {
+		FileStream^ fs = gcnew FileStream(saveFileDialog1->FileName, FileMode::Create);
+		StreamWriter^ sw = gcnew StreamWriter(fs);
+		cli::array<String^>^ tempArray = gcnew cli::array<String^>(txtBoxOutList->Lines->Length);
+		// テキスト行の取得
+		tempArray = txtBoxOutList->Lines;
+		// 書き出し（ラベルも含めて出力）
+		try {
+			/* 先頭にORG追加 */
+			sprintf_s(orgstr, 32, "\t\t\t\t\tORG\t$%X\n", topadr + ofsadr);
+			String^ ss = gcnew String(orgstr);
+			sw->WriteLine(ss);
+			/* アセンブルリストの書き出し */
+			for (linct = 0; linct < tempArray->Length; linct++) {
+				sw->WriteLine(tempArray[linct]);
+			}
+		}
+		finally {
+			sw->Close();
+			fs->Close();
+			toolStripStatusLabel1->Text = "List file writing is successed. ( " + linct.ToString("D") + " 行 )";
+			toolStripProgressBar1->Value = 0;
+			f_Lnosave = false;	/* 未保存のListファイルはない */
+		}
+	}
+	catch (Exception^) {
+		toolStripStatusLabel1->Text = "List file writing is failed!";
+		return -1;
+	}
+	return 0;
 }
 
 /*==========================================================*/
@@ -1823,7 +1898,57 @@ int SaveListFile(void)
 /*==========================================================*/
 int SaveAsmFile(void)
 {
-   return 0;
+	int linct;
+	char orgstr[32];
+
+	if (!f_Anosave) {
+		if (MessageBox::Show("ファイルは既に保存されています．\n保存しますか．", "File is already saved.",
+			MessageBoxButtons::YesNo, MessageBoxIcon::Asterisk) != System::Windows::Forms::DialogResult::Yes) {
+			return 0;
+		}
+	}
+
+	toolStripStatusLabel1->Text = "in Assemble file writing ...";
+	toolStripProgressBar1->Maximum = txtBoxOutAsm->TextLength;
+	toolStripProgressBar1->Value = 0;
+	lstBoxSkipArea->Focus();	/* Listの選択状態回避のためFocusを移動しておく */
+	this->Update();				// 全再描画
+
+	try {
+		FileStream^ fs = gcnew FileStream(saveFileDialog1->FileName, FileMode::Create);
+		StreamWriter^ sw = gcnew StreamWriter(fs);
+		cli::array<String^>^ tempArray = gcnew cli::array<String^>(txtBoxOutAsm->Lines->Length);
+		// テキスト行の取得
+		tempArray = txtBoxOutAsm->Lines;
+		// 書き出し
+		try {
+			/* 先頭にORG追加 */
+			sprintf_s(orgstr, 32, "\tORG\t$%X\n", topadr + ofsadr);
+			String^ ss = gcnew String(orgstr);
+			sw->WriteLine(ss);
+			/* アセンブルリストの書き出し */
+			for (linct = 0; linct < tempArray->Length; linct++) {
+				sw->WriteLine(tempArray[linct]);
+			}
+			/* 末尾にEND追加 */
+			sprintf_s(orgstr, 32, "\tEND\t$%X\n", topadr + ofsadr);
+			ss = gcnew String(orgstr);
+			sw->WriteLine(ss);
+		}
+		finally {
+			sw->Close();
+			fs->Close();
+			// 終了処理
+			toolStripStatusLabel1->Text = "Asm file writing is successed. ( " + linct.ToString("D") + " 行 )";
+			toolStripProgressBar1->Value = 0;
+			f_Anosave = false;	/* 未保存のasmファイルはない */
+		}
+	}
+	catch (Exception^) {
+		toolStripStatusLabel1->Text = "Asm file writing is failed!";
+		return -1;
+	}
+	return 0;
 }
 
 /*==========================================================*/
@@ -1837,6 +1962,8 @@ void GetOffsetAdr(void)
 	OffsetInForm^ OffsetInForm1 = gcnew OffsetInForm();
 	OffsetInForm1->ShowDialog();
 
+	if (OffsetInForm1->txtBoxOffsetIn->Text == "")
+		return;
 	std::string ss = "0000";
 	if (OffsetInForm1->txtBoxOffsetIn->Text == "")
 		ofsadr = 0;
@@ -1866,6 +1993,8 @@ void ListSkipArea(void)
 	SkipAreaInForm1->ShowDialog();
 
 	/* Convert to string */
+	if (SkipAreaInForm1->txtBoxSkipAreaIn->Text == "")
+		return;
 	std::string ss = "0000";
 	MarshalString(SkipAreaInForm1->txtBoxSkipAreaIn->Text, ss);
 	/* スタート、エンドアドレスを取得 */
