@@ -18,13 +18,13 @@ struct {
 
 typedef struct {
 	char Label[32];
-	unsigned int adr;
+	unsigned int	adr;
 } sLblTbl;
 
-sLblTbl LblTbl[2000];					/* ラベルテーブル構造 */
-unsigned char dbuf[65536];				/* バイナリデータ格納用 */
-unsigned int sttadr[100], endadr[100];	/* スキップ範囲のアドレス */
-unsigned char oprstr[256];				/* FCCのオペランド文字列 */
+sLblTbl LblTbl[2000];						/* ラベルテーブル構造 */
+unsigned char dbuf[65536];					/* バイナリデータ格納用 */
+unsigned int sttadr[100], endadr[100];		/* スキップ範囲のアドレス */
+unsigned char oprstr[256];					/* FCCのオペランド文字列 */
 char outbuf[256], outbuf2[256];				/* 出力文字列作成用 */
 
 namespace My6502DAsmWin {
@@ -533,8 +533,8 @@ void Execute()
 	ofsadr = svofsadr;
 
 	/* リスト表示用txtBoxを非表示に */
-//	txtBoxOutList->Visible = false;
-//	txtBoxOutAsm->Visible = false;
+	txtBoxOutList->Visible = false;
+	txtBoxOutAsm->Visible = false;
 	/* リスト表示用txtBoxをクリア */
 	f_Lnosave = false;	/* 未保存のデータはない */
 	f_Anosave = false;	/* 未保存のデータはない */
@@ -542,44 +542,106 @@ void Execute()
 	/*------------------------------------------------------*/
 	/*		Pass 1 ラベルを登録								*/
 	/*------------------------------------------------------*/
-
-   ////////////////////////////////////////////////////////////
-   /* for debug */
-   DispData();
-   ////////////////////////////////////////////////////////////
-
+	toolStripStatusLabel1->Text = "Disassemble start ... Pass 1";
+	toolStripProgressBar1->Maximum = btmadr - topadr + 1;
+	toolStripProgressBar1->Value = 0;
+	statusStrip1->Update();		/* statusStripを再描画 */
+	linect = 1;					/* 行カウンタは1から */
+	lblct = 0;					/* ラベルテーブルクリア */
 	adrct = topadr + ofsadr;	/* アドレスは先頭アドレスとオフセットアドレスの和 */
 	bct = topadr;				/* 逆アセンブルするデータは先頭アドレスからに入っている */
 	try {
 		while ((unsigned int)bct <= btmadr) {
 			/* アドレスのスキップ範囲のチェック */
-//			CheckSkipArea();
+			CheckSkipArea();
 
 			/* 1文字ずつ読みながら処理 */
 			Pass1(&bct);
 
 			/* 行カウンタ更新 */
 			linect++;
-//			toolStripProgressBar1->Value = bct - 1 - topadr;
+			toolStripProgressBar1->Value = bct - topadr;
 
 		}
 	}
 	catch (Exception^) {
-//		toolStripStatusLabel1->Text = "Disassemble (Pass 1) is failed!";
+		toolStripStatusLabel1->Text = "Disassemble (Pass 1) is failed!";
 		statusStrip1->Update();
 		return;
 	}
 
-////////////////////////////////////////////////////////////////////
-DispLabel();
-return;
-////////////////////////////////////////////////////////////////////
-
-
 	/*------------------------------------------------------*/
 	/*		Pass 2											*/
 	/*------------------------------------------------------*/
-	Pass2();
+	toolStripStatusLabel1->Text = "Disassemble start ... Pass 2";
+	toolStripProgressBar1->Value = 0;
+	statusStrip1->Update();		/* statusStripを再描画 */
+	int i;
+	linect = 1;			/* 行カウンタは1から */
+	adrct = topadr + ofsadr;	/* アドレスは先頭アドレスとオフセットアドレスの和 */
+	bct = topadr;				/* 逆アセンブルするデータは先頭アドレスからに入っている */
+	try {
+		while ((unsigned int)bct <= btmadr) {
+			/* アドレスのスキップ範囲のチェック */
+			CheckSkipArea();
+
+			/* 1文字ずつ読みながら処理 */
+			Pass2(&bct);
+
+			/* txtBoxに書き込む */
+			txtBoxOutList->AppendText(gcnew String(outbuf));
+			txtBoxOutAsm->AppendText(gcnew String(outbuf2));
+
+			/* 行カウンタ更新 */
+			linect++;
+			toolStripProgressBar1->Value = bct - topadr;
+
+		}
+
+		/* ラベルテーブル出力 */
+		toolStripStatusLabel1->Text = "Label table listing ...";
+		toolStripProgressBar1->Maximum = lblct;
+		statusStrip1->Update();
+
+		/* txtBoxに書き込む */
+		sprintf_s(outbuf, "\r\nLabel\taddress\r\n");
+		txtBoxOutList->AppendText(gcnew String(outbuf));
+		int ln = lblct / 4;
+		for (i = 0; i < ln; i++) {
+			sprintf_s(outbuf, "%-6s\t%04X\t%-6s\t%04X\t%-6s\t%04X\t%-6s\t%04X\r\n",
+				LblTbl[i * 4].Label, LblTbl[i * 4].adr,
+				LblTbl[i * 4 + 1].Label, LblTbl[i * 4 + 1].adr,
+				LblTbl[i * 4 + 2].Label, LblTbl[i * 4 + 2].adr,
+				LblTbl[i * 4 + 3].Label, LblTbl[i * 4 + 3].adr
+			);
+			txtBoxOutList->AppendText(gcnew String(outbuf));
+			toolStripProgressBar1->Value = i * 4;
+		}
+		for (i = 0; i < lblct - ln * 4; i++) {
+			sprintf_s(outbuf, "%-6s\t%04X\t", LblTbl[i + ln * 4].Label, LblTbl[i + ln * 4].adr);
+			txtBoxOutList->AppendText(gcnew String(outbuf));
+		}
+	}
+	catch (Exception^) {
+		toolStripStatusLabel1->Text = "Disassemble (Pass 2) is failed!";
+		statusStrip1->Update();
+		return;
+	}
+	// 終了処理
+	//カレット位置を先頭に移動
+	txtBoxOutList->SelectionStart = 0;
+	//テキストボックスにフォーカスを移動
+	txtBoxOutList->Focus();
+	//カレット位置までスクロール
+	txtBoxOutList->ScrollToCaret();
+	txtBoxOutList->Show();	/* ここで表示 */
+	txtBoxOutAsm->Show();	/* ここで表示 */
+	f_Lnosave = true;	/* 未保存のListファイルがある */
+	f_Anosave = true;	/* 未保存のAssembleファイルがある */
+	toolStripStatusLabel1->Text = "Disassemble is completed. ( $" + (bct - topadr).ToString("X4") + " bytes )";
+	toolStripProgressBar1->Value = 0;
+
+	return;
 	
 }
 
@@ -691,10 +753,506 @@ int Pass1(int *binct)
 }
 
 /*==========================================================*/
-/*		Pass 2									*/
+/*		Pass 2 - Make disassembled list 					*/
 /*==========================================================*/
-int Pass2()
+int Pass2(int* binct)
 {
+	int i = 0;
+	unsigned int operand = 0;
+	unsigned int absadr;		/* Relative命令の絶対アドレス */
+	sLblTbl* lpt;				/* ラベルの番号のポインタ */
+	sLblTbl* lpt2;				/* オペランドのラベルの番号のポインタ */
+	char s[256];				/* FCB,FCC化した複数バイト数の4倍必要 */
+
+	opcode = dbuf[(*binct)++];
+	if (inskip_s) {
+		strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), "FCB");		/* スキップしたコードはFCB扱い */
+		ope.oplen = 1;						/* そのオペコード長は1 */
+		ope.optype = 0;						/* タイプは0に */
+	}
+	else if (inskip_m) {
+		(*binct)--;
+		if (dbuf[(*binct)] >= 0x20 && dbuf[(*binct)] <= 0x7F) {
+			strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), "FCC");	/* スキップしたコードはFCC扱い */
+			oprstr[0] = '/';
+			for (i = 0; i < ope.oplen; i++) {
+				oprstr[i + 1] = dbuf[(*binct)++];
+			}
+			oprstr[i + 1] = '/';
+			oprstr[i + 2] = '\0';
+		}
+		else {
+			strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), "FCB");	/* スキップしたコードはFCB扱い */
+			oprstr[0] = '\0';
+			for (i = 0; i < ope.oplen; i++) {
+				sprintf_s(s, sizeof(s), "$%02X,", dbuf[(*binct)++]);
+				strcat_s((char*)oprstr, sizeof(oprstr), s);
+			}
+			oprstr[i * 4 - 1] = '\0';
+		}
+//		ope.oplen = 1;						/* FCB,FCCなのでオペコード長は1 */
+		ope.optype = 0;						/* タイプは0に */
+	}
+	else {
+		i = 0;
+		while (i < 256) {	/* ニーモニックテーブルから */
+			if (opcode != OpcodeTbl[i].opcode) {	/* 一致するニーモニックを得て */
+				i++;
+			}
+			else {
+				strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), OpcodeTbl[i].mnemonic);
+				ope.oplen = OpcodeTbl[i].oplen;		/* そのオペコード長を格納 */
+				ope.optype = OpcodeTbl[i].optype;	/* タイプも格納 */
+				break;
+			}
+		}
+
+		/*  オペランド長に合わせて次を読み込む */
+		operand1 = 0;
+		operand2 = 0;
+		switch (ope.oplen) {
+		case 0:
+		case 1:
+			break;
+		case 2:
+			operand1 = dbuf[(*binct)++];
+			operand = operand1;
+			break;
+		case 3:
+			operand1 = dbuf[(*binct)++];
+			operand2 = dbuf[(*binct)++];
+			operand = (operand2 * 0x100 + operand1) & 0xffff;
+			break;
+		}
+	}
+
+	// ***** 出力用文字列作成 *****
+	txtBoxOutList->Hide();	/* 作成中は非表示 */
+	txtBoxOutAsm->Hide();	/* 作成中は非表示 */
+	/* アドレスは4桁 */
+	adrct &= 0xffff;
+	/* まずそのアドレスに設定されたラベルがあるかをチェック */
+	if ((lpt = GetLabel(adrct))) {		/* ラベルがある場合 */
+		/* オペタイプに合わせて処理（ラベルあり） */
+		switch (ope.optype) {
+		case  0: /* (no opcode)                                    oplen-1  */
+			if (inskip_s) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X\t\t%-6s\t%s\t$%02X\t\t\'%c\r\n",
+					linect, adrct, opcode, lpt->Label, ope.mnemonic, opcode, ((opcode > 0x20 && opcode < 0x7f) ? opcode : ' '));
+				sprintf_s(outbuf2, "%-6s\t%s\t$%02X\t\'%c\r\n", lpt->Label, ope.mnemonic, opcode, ((opcode > 0x20 && opcode < 0x7f) ? opcode : ' '));
+			}
+			else if (inskip_m) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X\t\t%-6s\t%s\t%s\r\n",
+					linect, adrct, opcode, lpt->Label, ope.mnemonic, oprstr);
+				sprintf_s(outbuf2, "%-6s\t%s\t%s\r\n", lpt->Label, ope.mnemonic, oprstr);
+			}
+			else {
+				if (opcode != '\0') {
+					sprintf_s(outbuf, "%04d\t%04X\t?-%02X-\t\t\t%-6s\t\'%c\'\r\n",
+						linect, adrct, opcode, lpt->Label, opcode);
+					sprintf_s(outbuf2, "%s\t\t\'%c\'\r\n", lpt->Label, opcode);
+				}
+				else {
+					sprintf_s(outbuf, "%04d\t%04X\t?-%02X-\t\t\t%-6s\t\'\'\r\n",
+						linect, adrct, opcode, lpt->Label);
+					sprintf_s(outbuf2, "%s\t\t\'\'\r\n", lpt->Label);
+				}
+			}
+			break;
+		case  6: /*  6:Accumulator							 6:A		0	*/
+		case  8: /*  8:Implied								 8:i		0	*/
+		case 10: /* 10:Stack								10:s 		0	*/
+			sprintf_s(outbuf, "%04d\t%04X\t%02X\t\t%-6s\t%-5s\r\n", 
+				linect, adrct, opcode, lpt->Label, ope.mnemonic);
+			sprintf_s(outbuf2, "%-6s\t%-5s\r\n", lpt->Label, ope.mnemonic);
+			break;
+		case  7: /*  7:Immediate							 7:#		1	*/
+			sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t#$%02X\r\n",
+				linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+			sprintf_s(outbuf2, "%-6s\t%-5s\t#$%02X\r\n", lpt->Label, ope.mnemonic, operand1);
+			break;
+		case 11: /* 11:Zero page							11:zp 		1	*/
+			/* 絶対アドレスがラベル化できるか */
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t%-6s\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t$%02X\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t$%02X\r\n", lpt->Label, ope.mnemonic, operand1);
+			}
+			break;
+		case 12: /* 12:Zero page Indexed Indirect			12:(zp,x) 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X\t%02X\t\t%-6s\t%-5s\t(%-6s,X)\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t(%-6s,X)\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X\t%02X\t\t%-6s\t%-5s\t($%02X,X)\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t($%02X,X)\r\n", lpt->Label, ope.mnemonic, operand1);
+			}
+			break;
+		case 13: /* 13:Zero page Indexed with X				13:zp,x 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t%-6s,X\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s,X\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t$%02X,X\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t$%02X,X\r\n", lpt->Label, ope.mnemonic, operand1);
+			}
+			break;
+		case 14: /* 14:Zero page Indexed with Y				14:zp,y 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t%-6s,y\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s,y\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t$%02X,y\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t$%02X,y\r\n", lpt->Label, ope.mnemonic, operand1);
+			}
+			break;
+		case 15: /* 15:Zero Page Indirect					15:(zp) 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t(%-6s)\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t(%-6s)\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t($%02X)\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t($%02X)\r\n", lpt->Label, ope.mnemonic, operand1);
+			}
+			break;
+		case 16: /* 16:Zero Page Indirect Indexed with Y	16:(zp),y 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t(%-6s),y\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t(%-6s),y\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t($%02X),y\r\n",
+					linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t($%02X),y\r\n", lpt->Label, ope.mnemonic, operand1);
+			}
+			break;
+		case  1: /*  1:Absolute								 1:a		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t%-6s\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t$%02X%02X\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t$%02X%02X\r\n", lpt->Label, ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  2: /*  2:Absolute Indexed Indirect			 2:(a,x)	2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t(%-6s,X)\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t(%-6s,X)\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t($%02X%02X,X)\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t($%02X%02X,X)\r\n", lpt->Label, ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  3: /*  3:Absolute Indexed with X				 3:a,x		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t%-6s,X\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s,X\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t$%02X%02X,X\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t$%02X%02X,X\r\n", lpt->Label, ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  4: /*  4:Absolute Indexed with Y				 4:a,y		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t%-6s,y\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s,y\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t$%02X%02X,y\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t$%02X%02X,y\r\n", lpt->Label, ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  5: /*  5:Absolute Indirect					 5:(a)		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t(%-6s)\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t(%-6s)\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t%-6s\t%-5s\t($%02X%02X)\r\n",
+					linect, adrct, opcode, operand1, operand2, lpt->Label, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "%-6s\t%-5s\t($%02X%02X)\r\n", lpt->Label, ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  9: /*  9:Program Counter Relative				 9:r		1	*/
+			/* 絶対アドレスを求めて */
+			absadr = adrct + operand + ope.oplen;
+			if (operand1 >= 0x80)
+				absadr -= 0x100;
+			/* Relative命令かどうか */
+			if (((opcode & 0x1f) == 0x10) || (opcode == 0x80)) {	/* Bxx or BRA */
+				if ((lpt2 = GetLabel(absadr))) {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t%-6s\r\n",
+						linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+					sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+				}
+				else {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t%02X\r\n",
+						linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+					sprintf_s(outbuf2, "%-6s\t%-5s\t%02X\r\n", lpt->Label, ope.mnemonic, operand1);
+				}
+			}
+			else {	/* BBRn or BBSn */
+				if ((lpt2 = GetLabel(absadr))) {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t%-6s\r\n",
+						linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, lpt2->Label);
+					sprintf_s(outbuf2, "%-6s\t%-5s\t%-6s\r\n", lpt->Label, ope.mnemonic, lpt2->Label);
+				}
+				else {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t%-6s\t%-5s\t%02X\r\n",
+						linect, adrct, opcode, operand1, lpt->Label, ope.mnemonic, operand1);
+					sprintf_s(outbuf2, "%-6s\t%-5s\t%02X\r\n", lpt->Label, ope.mnemonic, operand1);
+				}
+			}
+			break;
+		}
+	}
+	else {	/* ラベルがない場合 */
+		/* オペタイプに合わせて処理（ラベルなし）*/
+		switch (ope.optype) {
+		case  0: /* (no opcode)                                    oplen-1  */
+			if (inskip_s) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X\t\t\t%-5s\t$%02X\t\t\'%c\r\n", 
+					linect, adrct, opcode, ope.mnemonic, opcode, ((opcode > 0x20 && opcode < 0x7f) ? opcode : ' '));
+				sprintf_s(outbuf2, "\t%-5s\t$%02X\t\t\'%c\r\n", 
+					ope.mnemonic, opcode, ((opcode > 0x20 && opcode < 0x7f) ? opcode : ' '));
+			}
+			else if (inskip_m) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X\t\t\t%-5s\t%s\r\n", 
+					linect, adrct, opcode, ope.mnemonic, oprstr);
+				sprintf_s(outbuf2, "\t%-5s\t%s\r\n", 
+					ope.mnemonic, oprstr);
+			}
+			else {
+				if (opcode != '\0') {
+					sprintf_s(outbuf, "%04d\t%04X\t?-%02X-\t\t\t\'%c\'\r\n", linect, adrct, opcode, opcode);
+					sprintf_s(outbuf2, "\t?-%02X-\t\t\'%c\'\r\n", opcode, opcode);
+				}
+				else {
+					sprintf_s(outbuf, "%04d\t%04X\t?-%02X-\t\t\t\'\'\r\n", linect, adrct, opcode);
+					sprintf_s(outbuf2, "\t?-%02X-\t\t\'\'\r\n", opcode);
+				}
+			}
+			break;
+		case  6: /*  6:Accumulator							 6:A		0	*/
+		case  8: /*  8:Implied								 8:i		0	*/
+		case 10: /* 10:Stack								10:s 		0	*/
+			sprintf_s(outbuf, "%04d\t%04X\t%02X\t\t\t%-5s\r\n", 
+				linect, adrct, opcode, ope.mnemonic);
+			sprintf_s(outbuf2, "\t%-5s\r\n", ope.mnemonic);
+			break;
+		case  7: /*  7:Immediate							 7:#		1	*/
+			sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t#$%02X\r\n",
+				linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+			sprintf_s(outbuf2, "\t%-5s\t#$%02X\r\n", ope.mnemonic, operand1);
+			break;
+		case 11: /* 11:Zero page							11:zp 		1	*/
+			/* 絶対アドレスがラベル化できるか */
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t%-6s\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t%-6s\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t$%02X\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "\t%-5s\t$%02X\r\n", ope.mnemonic, operand1);
+			}
+			break;
+		case 12: /* 12:Zero page Indexed Indirect			12:(zp,x) 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t(%-6s,X)\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t(%-6s,X)\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t($%02X,X)\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "\t%-5s\t($%02X,X)\r\n", ope.mnemonic, operand1);
+			}
+			break;
+		case 13: /* 13:Zero page Indexed with X				13:zp,x 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t%-6s,X\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t%-6s,X\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t$%02X,X\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "\t%-5s\t$%02X,X\r\n", ope.mnemonic, operand1);
+			}
+			break;
+		case 14: /* 14:Zero page Indexed with Y				14:zp,y 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t%-6s,y\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t%-6s,y\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t$%02X,y\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "\t%-5s\t$%02X,y\r\n", ope.mnemonic, operand1);
+			}
+			break;
+		case 15: /* 15:Zero Page Indirect					15:(zp) 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t(%-6s)\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t(%-6s)\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t($%02X)\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "\t%-5s\t($%02X)\r\n", ope.mnemonic, operand1);
+			}
+			break;
+		case 16: /* 16:Zero Page Indirect Indexed with Y	16:(zp),y 	1	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t(%-6s),y\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t(%-6s),y\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t($%02X),y\r\n",
+					linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+				sprintf_s(outbuf2, "\t%-5s\t($%02X),y\r\n", ope.mnemonic, operand1);
+			}
+			break;
+		case  1: /*  1:Absolute								 1:a		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t%-6s\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t%-6s\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t$%02X%02X\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "\t%-5s\t$%02X%02X\r\n", ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  2: /*  2:Absolute Indexed Indirect			 2:(a,X)	2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t(%-6s,X)\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t(%-6s,X)\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t($%02X%02X,X)\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "\t%-5s\t($%02X%02X,X)\r\n", ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  3: /*  3:Absolute Indexed with X				 3:a,x		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t%-6s,X\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t%-6s,X\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t$%02X%02X,X\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "\t%-5s\t$%02X%02X,X\r\n", ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  4: /*  4:Absolute Indexed with Y				 4:a,y		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t%-6s,y\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t%-6s,y\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t$%02X%02X,y\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "\t%-5s\t$%02X%02X,y\r\n", ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  5: /*  5:Absolute Indirect					 5:(a)		2	*/
+			if ((lpt2 = GetLabel(operand))) {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t(%-6s)\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, lpt2->Label);
+				sprintf_s(outbuf2, "\t%-5s\t(%-6s)\r\n", ope.mnemonic, lpt2->Label);
+			}
+			else {
+				sprintf_s(outbuf, "%04d\t%04X\t%02X %02X%02X\t\t\t%-5s\t($%02X%02X)\r\n",
+					linect, adrct, opcode, operand1, operand2, ope.mnemonic, operand1, operand2);
+				sprintf_s(outbuf2, "\t%-5s\t($%02X%02X)\r\n", ope.mnemonic, operand1, operand2);
+			}
+			break;
+		case  9: /*  9:Program Counter Relative				 9:r		1	*/
+			/* 絶対アドレスを求めて */
+			absadr = adrct + operand + ope.oplen;
+			if (operand1 >= 0x80)
+				absadr -= 0x100;
+			/* Relative命令かどうか */
+			if (((opcode & 0x1f) == 0x10) || (opcode == 0x80)) {	/* Bxx or BRA */
+				if ((lpt2 = GetLabel(absadr))) {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t%-6s\r\n",
+						linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+					sprintf_s(outbuf2, "\t%-5s\t%-6s\r\n", ope.mnemonic, lpt2->Label);
+				}
+				else {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t$%02X\r\n",
+						linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+					sprintf_s(outbuf2, "\t%-5s\t$%02X\r\n", ope.mnemonic, operand1);
+				}
+			}
+			else {	/* BBRn or BBSn */
+				/* 絶対アドレスを求めて */
+				absadr = adrct + operand + ope.oplen;
+				if (operand1 >= 0x80)
+					absadr -= 0x100;
+				if ((lpt2 = GetLabel(absadr))) {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t%-6s\r\n",
+						linect, adrct, opcode, operand1, ope.mnemonic, lpt2->Label);
+					sprintf_s(outbuf2, "\t%-5s\t%-6s\r\n", ope.mnemonic, lpt2->Label);
+				}
+				else {
+					sprintf_s(outbuf, "%04d\t%04X\t%02X %02X\t\t\t%-5s\t$%02X\r\n",
+						linect, adrct, opcode, operand1, ope.mnemonic, operand1);
+					sprintf_s(outbuf2, "\t%-5s\t$%02X\r\n", ope.mnemonic, operand1);
+				}
+			}
+			break;
+		}
+	}
+
+	/* アドレス更新 */
+	if (ope.oplen == 0)
+		adrct++;			/* 命令コードでなくてもカウントアップ */
+	else
+		adrct += ope.oplen;
+
 	return 0;
 }
 
@@ -735,6 +1293,29 @@ static int cmp_str(const void* p1, const void* p2)
 	sLblTbl* cmp2 = (sLblTbl*)p2;
 
 	return _stricmp((const char*)(cmp1->Label), (const char*)(cmp2->Label));
+}
+
+/*==========================================================*/
+/*		Get Label											*/
+/*==========================================================*/
+sLblTbl* GetLabel(unsigned int adr)
+{
+	sLblTbl* lpt;
+
+	// そのアドレスに設定されているラベルがあるかを調べ
+	// あればそのポインタlptを、なければNULLを返す
+	lpt = (sLblTbl*)bsearch(&adr, LblTbl, lblct, sizeof(sLblTbl), cmp_adr);
+	return lpt;
+}
+
+static int cmp_adr(const void* p1, const void* p2)
+{
+	//	sLblTbl* cmp1 = (sLblTbl*)p1;
+	sLblTbl* cmp2 = (sLblTbl*)p2;
+
+	int tmp1 = *(int*)p1;
+
+	return tmp1 - cmp2->adr;
 }
 
 /*==========================================================*/
@@ -1393,40 +1974,6 @@ void MarshalString(String^ s, std::string& os)
 	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(s)).ToPointer();
 	os = chars;
 	Marshal::FreeHGlobal(IntPtr((void*)chars));
-}
-
-//////////////////////////////////////////////////////////////
-/* for debug */
-void DispData(void)
-{
-   int dcnt = 0;
-   int i = 0;
-   char dstr[10];
-   char outbuf[256];
-
-   // とりあえず確認のために読み込んだデータを表示させてみる
-   outbuf[0] = '\0';
-   while (dcnt < dlen) {
-	   sprintf_s(dstr, "%02X ", dbuf[topadr + dcnt + i++]);
-	   strcat(outbuf, dstr);
-	   if (i == 16 || dcnt + i >= dlen) {
-		   strcat(outbuf, "\r\n");
-		   txtBoxOutList->AppendText(gcnew String(outbuf));
-		   outbuf[0] = '\0';
-		   dcnt += i;
-		   i = 0;
-	   }
-   }
-}
-
-void DispLabel(void)
-{
-	char outbuf[16];
-
-	for (int i = 0; i < lblct; i++) {
-		sprintf_s(outbuf, "%04X %s\r\n", LblTbl[i].adr & 0xffff, LblTbl[i].Label);
-		txtBoxOutAsm->AppendText(gcnew String(outbuf));
-	}
 }
 
 };

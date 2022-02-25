@@ -21,3 +21,9 @@ D:\work\VC\VC2019\Make6502DAsm_process\06StartCoding-pass1\6502DAsmWin\6502DAsmW
 D:\work\VC\VC2019\Make6502DAsm_process\06StartCoding-pass1\6502DAsmWin\6502DAsmWin\Debug\My6502DAsmWin.OffsetInForm.resources
 D:\work\VC\VC2019\Make6502DAsm_process\06StartCoding-pass1\6502DAsmWin\6502DAsmWin\Debug\My6502DAsmWin.SkipAreaInForm.resources
 D:\work\VC\VC2019\Make6502DAsm_process\06StartCoding-pass1\6502DAsmWin\6502DAsmWin\Debug\6502DAsmWin.vcxproj.GenerateResource.cache
+D:\work\VC\VC2019\Make6502DAsm_process\07StartCoding-pass2\6502DAsmWin\6502DAsmWin\Debug\My6502DAsmWin.Form1.resources
+D:\work\VC\VC2019\Make6502DAsm_process\07StartCoding-pass2\6502DAsmWin\6502DAsmWin\Debug\My6502DAsmWin.HelpForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\07StartCoding-pass2\6502DAsmWin\6502DAsmWin\Debug\My6502DAsmWin.OffsetInForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\07StartCoding-pass2\6502DAsmWin\6502DAsmWin\Debug\My6502DAsmWin.SkipAreaInForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\07StartCoding-pass2\6502DAsmWin\6502DAsmWin\Debug\6502DAsmWin.vcxproj.GenerateResource.cache
+D:\work\VC\VC2019\Make6502DAsm_process\07StartCoding-pass2\6502DAsmWin\6502DAsmWin\Debug\6502DAsmWin.vcxproj.AssemblyReference.cache
