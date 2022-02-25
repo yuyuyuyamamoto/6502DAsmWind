@@ -5,6 +5,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <iostream>
+#include "R65C02dopcode.h"
 #include "HelpForm.h"
 #include "OffsetInForm.h"
 #include "SkipAreaInForm.h"
@@ -23,6 +24,8 @@ typedef struct {
 sLblTbl LblTbl[2000];					/* ラベルテーブル構造 */
 unsigned char dbuf[65536];				/* バイナリデータ格納用 */
 unsigned int sttadr[100], endadr[100];	/* スキップ範囲のアドレス */
+unsigned char oprstr[256];				/* FCCのオペランド文字列 */
+char outbuf[256], outbuf2[256];				/* 出力文字列作成用 */
 
 namespace My6502DAsmWin {
 
@@ -107,6 +110,10 @@ namespace My6502DAsmWin {
 		bool inskip_m = false;			/* スキップするアドレス範囲か（連続アドレスの場合）*/
 		int skpct = 0;					/* スキップするアドレス範囲数 */
 		unsigned int adrct = 0;			/* アドレスカウンタ */
+		unsigned char opcode;					/* オペコード */
+		unsigned char operand1, operand2;		/* オペランド(2bytes) */
+		int lblct = 0;							/* ラベルテーブルカウンタ */
+		int linect = 0;							/* 行カウンタ */
 
 #pragma region Windows Form Designer generated code
 		/// <summary>
@@ -507,13 +514,227 @@ namespace My6502DAsmWin {
 
 void Execute()
 {
+	int bct = 0;		// バイナリデータのカウンタ 
+	int ct = 0;			//
+	int svofsadr;		//
+
+	// 初期設定
+	try {
+		svofsadr = Convert::ToInt16(txtBoxOfsAdr->Text->Substring(1), 16) & 0xffff;
+	}
+	catch (Exception^) {
+		svofsadr = 0;
+	}
+	txtBoxOutList->Clear();
+	txtBoxOutAsm->Clear();
+	// ファイル読み込み
+	if (LoadFile() == -1)
+		return;
+	ofsadr = svofsadr;
+
+	/* リスト表示用txtBoxを非表示に */
+//	txtBoxOutList->Visible = false;
+//	txtBoxOutAsm->Visible = false;
+	/* リスト表示用txtBoxをクリア */
+	f_Lnosave = false;	/* 未保存のデータはない */
+	f_Anosave = false;	/* 未保存のデータはない */
+
+	/*------------------------------------------------------*/
+	/*		Pass 1 ラベルを登録								*/
+	/*------------------------------------------------------*/
 
    ////////////////////////////////////////////////////////////
    /* for debug */
    DispData();
    ////////////////////////////////////////////////////////////
 
+	adrct = topadr + ofsadr;	/* アドレスは先頭アドレスとオフセットアドレスの和 */
+	bct = topadr;				/* 逆アセンブルするデータは先頭アドレスからに入っている */
+	try {
+		while ((unsigned int)bct <= btmadr) {
+			/* アドレスのスキップ範囲のチェック */
+//			CheckSkipArea();
 
+			/* 1文字ずつ読みながら処理 */
+			Pass1(&bct);
+
+			/* 行カウンタ更新 */
+			linect++;
+//			toolStripProgressBar1->Value = bct - 1 - topadr;
+
+		}
+	}
+	catch (Exception^) {
+//		toolStripStatusLabel1->Text = "Disassemble (Pass 1) is failed!";
+		statusStrip1->Update();
+		return;
+	}
+
+////////////////////////////////////////////////////////////////////
+DispLabel();
+return;
+////////////////////////////////////////////////////////////////////
+
+
+	/*------------------------------------------------------*/
+	/*		Pass 2											*/
+	/*------------------------------------------------------*/
+	Pass2();
+	
+}
+
+/*==========================================================*/
+/*		Pass 1 - Register Label								*/
+/*==========================================================*/
+int Pass1(int *binct)
+{
+	int i;
+	unsigned int operand = 0;
+	unsigned int absadr;		/* Relative命令の絶対アドレス */
+	char s[256];				/* FCB,FCC化した複数バイト数の4倍必要 */
+
+	opcode = dbuf[(*binct)++];
+	if (inskip_s) {
+		strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), "FCB");		/* スキップしたコードはFCB扱い */
+		ope.oplen = 1;						/* そのオペコード長は1 */
+		ope.optype = 0;						/* タイプは0に */
+	}
+	else if (inskip_m) {
+		(*binct)--;
+		if (dbuf[(*binct)] >= 0x20 && dbuf[(*binct)] <= 0x7F) {
+			strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), "FCC");	/* スキップしたコードはFCC扱い */
+			oprstr[0] = '/';
+			for (i = 0; i < ope.oplen; i++) {
+				oprstr[i + 1] = dbuf[(*binct)++];
+			}
+			oprstr[i + 1] = '/';
+			oprstr[i + 2] = '\0';
+		}
+		else {
+			strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), "FCB");	/* スキップしたコードはFCB扱い */
+			oprstr[0] = '\0';
+			for (i = 0; i < ope.oplen; i++) {
+				sprintf_s(s, sizeof(s), "$%02X,", dbuf[(*binct)++]);
+				strcat_s((char*)oprstr, sizeof(oprstr), s);
+			}
+			oprstr[i * 4 - 1] = '\0';
+		}
+		ope.optype = 0;						/* タイプは0に */
+	}
+	else {					// no skip area
+		/* ニーモニックテーブルからニーモニック,オペランド長,オペコードタイプを読み取る */
+		strcpy_s(ope.mnemonic, sizeof(ope.mnemonic), OpcodeTbl[opcode].mnemonic);
+		ope.oplen = OpcodeTbl[opcode].oplen;
+		ope.optype = OpcodeTbl[opcode].optype;
+	}
+	
+	/* オペランド長(ope.oplen-1)に従ってオペランドを読み込む */
+	operand1 = 0;
+	operand2 = 0;
+	switch (ope.oplen) {
+	case 0:
+	case 1:
+			break;
+	case 2:
+			operand1 = dbuf[(*binct)++];
+			operand = operand1;
+			break;
+	case 3:
+			operand1 = dbuf[(*binct)++];
+			operand2 = dbuf[(*binct)++];
+			operand = (operand2 * 0x100 + operand1) & 0xffff;
+			break;
+	}
+	
+	/* ラベル作成 */
+	switch (ope.optype) {
+	case  0: /* (no opcode)                                    oplen-1  */
+	case  6: /*  6:Accumulator							 6:A		0	*/
+	case  7: /*  7:Immediate							 7:#		1	*/
+	case  8: /*  8:Implied								 8:i		0	*/
+	case 10: /* 10:Stack								10:s 		0	*/
+		break;
+	case 11: /* 11:Zero page							11:zp 		1	*/
+	case 12: /* 12:Zero page Indexed Indirect			12:(zp,x) 	1	*/
+	case 13: /* 13:Zero page Indexed with X				13:zp,x 	1	*/
+	case 14: /* 14:Zero page Indexed with Y				14:zp,y 	1	*/
+	case 15: /* 15:Zero Page Indirect					15:(zp) 	1	*/
+	case 16: /* 16:Zero Page Indirect Indexed with Y	16:(zp),y 	1	*/
+			MakeLabel(operand & 0xff);
+		break;
+	case  1: /*  1:Absolute								 1:a		2	*/
+	case  2: /*  2:Absolute Indexed Indirect			 2:(a,x)	2	*/
+	case  3: /*  3:Absolute Indexed with X				 3:a,x		2	*/
+	case  4: /*  4:Absolute Indexed with Y				 4:a,y		2	*/
+	case  5: /*  5:Absolute Indirect					 5:(a)		2	*/
+			MakeLabel(operand & 0xffff);
+		break;
+	case  9: /*  9:Program Counter Relative				 9:r		1	*/
+			/* Relative命令かどうか */
+			if (((opcode & 0x1f) == 0x10) || (opcode == 0x80)) {
+				/* 絶対アドレスを求めて */
+				absadr = adrct + operand + ope.oplen;
+				if (operand >= 0x80)
+					absadr -= 0x100;
+				MakeLabel(absadr & 0xffff);
+			}
+			break;
+	}
+
+	/* アドレス更新 */
+	if (ope.oplen == 0)
+		adrct++;			/* 命令コードでなくてもカウントアップ */
+	else
+		adrct += ope.oplen;
+
+	return 0;
+}
+
+/*==========================================================*/
+/*		Pass 2									*/
+/*==========================================================*/
+int Pass2()
+{
+	return 0;
+}
+
+/*==========================================================*/
+/*		Make Label											*/
+/*==========================================================*/
+void MakeLabel(unsigned int absadr)
+{
+	char lbuf[16];
+	sLblTbl* lpt;
+	
+	/* ラベル作成 */
+	sprintf_s(lbuf, "L_%04X\0", absadr & 0xffff);
+
+	/* ラベルが登録済みかを調べ、登録済みならアドレスを更新してリターン */
+	lpt = (sLblTbl*)bsearch(lbuf, LblTbl, lblct, sizeof(sLblTbl), cmp_str);
+	if (lpt) {
+		/* ラベルが登録済みならアドレスを更新してリターン */
+		lpt->adr = absadr & 0xffff;
+		return;
+	}
+
+	/* ラベルが未登録なら */
+	/* とりあえず末尾に追加して */
+	strcpy_s(LblTbl[lblct].Label, lbuf);
+	LblTbl[lblct].adr = absadr & 0xffff;
+	lblct++;
+
+	/* qsortで並べ替える */
+	qsort(LblTbl, lblct, sizeof(sLblTbl), cmp_str);
+
+	return;
+}
+
+static int cmp_str(const void* p1, const void* p2)
+{
+	sLblTbl* cmp1 = (sLblTbl*)p1;
+	sLblTbl* cmp2 = (sLblTbl*)p2;
+
+	return _stricmp((const char*)(cmp1->Label), (const char*)(cmp2->Label));
 }
 
 /*==========================================================*/
@@ -1196,6 +1417,16 @@ void DispData(void)
 		   i = 0;
 	   }
    }
+}
+
+void DispLabel(void)
+{
+	char outbuf[16];
+
+	for (int i = 0; i < lblct; i++) {
+		sprintf_s(outbuf, "%04X %s\r\n", LblTbl[i].adr & 0xffff, LblTbl[i].Label);
+		txtBoxOutAsm->AppendText(gcnew String(outbuf));
+	}
 }
 
 };
