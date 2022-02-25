@@ -1,5 +1,10 @@
 ﻿  stdafx.cpp
   6502DAsmWin.cpp
+D:\work\VC\VC2019\Make6502DAsm_process\03Coding-inputfile\6502DAsmWin\6502DAsmWin\Form1.h(608,24): warning C4101: 'edadr': ローカル変数は 1 度も使われていません。
+D:\work\VC\VC2019\Make6502DAsm_process\03Coding-inputfile\6502DAsmWin\6502DAsmWin\Form1.h(1062,16): warning C4018: '<': signed と unsigned の数値を比較しようとしました。
+D:\work\VC\VC2019\Make6502DAsm_process\03Coding-inputfile\6502DAsmWin\6502DAsmWin\Form1.h(1065,29): warning C4018: '>=': signed と unsigned の数値を比較しようとしました。
+D:\work\VC\VC2019\Make6502DAsm_process\03Coding-inputfile\6502DAsmWin\6502DAsmWin\Form1.h(1064,5): warning C4996: 'strcat': This function or variable may be unsafe. Consider using strcat_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+D:\work\VC\VC2019\Make6502DAsm_process\03Coding-inputfile\6502DAsmWin\6502DAsmWin\Form1.h(1066,6): warning C4996: 'strcat': This function or variable may be unsafe. Consider using strcat_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
   AssemblyInfo.cpp
   HelpForm.cpp
   OffsetInForm.cpp
@@ -7,4 +12,4 @@
   コードを生成中...
   .NETFramework,Version=v4.0.AssemblyAttributes.cpp
   6502DAsmWin.obj : MSIL モジュールが見つかりました。MSIL ではインクリメンタル リンクは無効化されています。フル リンクを行います
-  6502DAsmWin.vcxproj -> D:\work\VC\VC2019\MakeDAsm\Make6502DAsm_process\02SetForm_byVC2019\6502DAsmWin\Debug\6502DAsmWin.exe
+  6502DAsmWin.vcxproj -> D:\work\VC\VC2019\Make6502DAsm_process\03Coding-inputfile\6502DAsmWin\Debug\6502DAsmWin.exe
