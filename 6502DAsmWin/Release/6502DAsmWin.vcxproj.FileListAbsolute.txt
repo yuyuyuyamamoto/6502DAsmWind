@@ -1,0 +1,10 @@
+D:\work\VC\VC2019\Make6502DAsm_process\09StartCoding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.Form1.resources
+D:\work\VC\VC2019\Make6502DAsm_process\09StartCoding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.HelpForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\09StartCoding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.OffsetInForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\09StartCoding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.SkipAreaInForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\09StartCoding-complete\6502DAsmWin\6502DAsmWin\Release\6502DAsmWin.vcxproj.GenerateResource.cache
+D:\work\VC\VC2019\Make6502DAsm_process\08Coding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.Form1.resources
+D:\work\VC\VC2019\Make6502DAsm_process\08Coding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.HelpForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\08Coding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.OffsetInForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\08Coding-complete\6502DAsmWin\6502DAsmWin\Release\My6502DAsmWin.SkipAreaInForm.resources
+D:\work\VC\VC2019\Make6502DAsm_process\08Coding-complete\6502DAsmWin\6502DAsmWin\Release\6502DAsmWin.vcxproj.GenerateResource.cache

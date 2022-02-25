@@ -1,0 +1,9 @@
+﻿  stdafx.cpp
+  6502DAsmWin.cpp
+  AssemblyInfo.cpp
+  HelpForm.cpp
+  OffsetInForm.cpp
+  SkipAreaInForm.cpp
+  コードを生成中...
+  .NETFramework,Version=v4.0.AssemblyAttributes.cpp
+  6502DAsmWin.vcxproj -> D:\work\VC\VC2019\Make6502DAsm_process\08Coding-complete\6502DAsmWin\Release\6502DAsmWin.exe
