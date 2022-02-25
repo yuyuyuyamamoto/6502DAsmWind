@@ -5,10 +5,24 @@
 #include <string.h>
 #include <ctype.h>
 #include <iostream>
-//#include "R65C02dopcode.h"
 #include "HelpForm.h"
 #include "OffsetInForm.h"
 #include "SkipAreaInForm.h"
+
+struct {
+	char mnemonic[5];	/* ニーモニック */
+	int oplen;			/* オペコード長 */
+	int optype;			/* タイプ */
+} ope;
+
+typedef struct {
+	char Label[32];
+	unsigned int adr;
+} sLblTbl;
+
+sLblTbl LblTbl[2000];					/* ラベルテーブル構造 */
+unsigned char dbuf[65536];				/* バイナリデータ格納用 */
+unsigned int sttadr[100], endadr[100];	/* スキップ範囲のアドレス */
 
 namespace My6502DAsmWin {
 
@@ -89,6 +103,10 @@ namespace My6502DAsmWin {
 		unsigned int topadr = 0, btmadr = 0;	/* 逆アセンブル時のアドレス */
 		bool f_Lnosave = false;					/* 未保存のAssembleファイルがあるか（あればtrue） */
 		bool f_Anosave = false;					/* 未保存のListファイルがあるか（あればtrue） */
+		bool inskip_s = false;			/* スキップするアドレス範囲か（単一アドレスの場合） */
+		bool inskip_m = false;			/* スキップするアドレス範囲か（連続アドレスの場合）*/
+		int skpct = 0;					/* スキップするアドレス範囲数 */
+		unsigned int adrct = 0;			/* アドレスカウンタ */
 
 #pragma region Windows Form Designer generated code
 		/// <summary>
@@ -657,8 +675,8 @@ int LoadHexFile(String^ FileName)
 			   ss = gcnew String(sc);
 			   try {
 				   adr = Convert::ToUInt16(ss, 16);
-//					if (adr < topadr)	/* adrの最小値を見つける */
-//						topadr = adr;
+				   //					if (adr < topadr)	/* adrの最小値を見つける */
+				   //						topadr = adr;
 				   if (ct == 0) {
 					   stadr = adr;
 					   topadr = adr;
@@ -722,8 +740,8 @@ int LoadHexFile(String^ FileName)
 					   csum += hexdata[i];
 				   }
 				   rdlen += len;
-//				   if (btmadr < adr + len)	/* 最終アドレスの最大値を見つける */
-//					   btmadr = adr + len;
+				   if (btmadr < adr + len)	/* 最終アドレスの最大値を見つける */
+					   btmadr = adr + len;
 			   }
 			   csum = (~(csum & 0xff) + 1) & 0xff;
 			   //Check Sum check
@@ -755,14 +773,14 @@ int LoadHexFile(String^ FileName)
 			   for (unsigned int i = 0; i < len; i++) {
 				   dbuf[(adr + i) & 0xffff] = hexdata[i] & 0xff;
 			   }
-//			   //Size check
-//			   if (maxadr < (adr + len)) {
-//				   maxadr = adr + len - 1;
-//			   }
-//			   if (edadr < maxadr)
-//				   edadr = maxadr;
-//			   else if (stadr > adr)
-//				   stadr = adr;
+			   //Size check
+			   if (maxadr < (adr + len)) {
+				   maxadr = adr + len - 1;
+			   }
+			   if (edadr < maxadr)
+				   edadr = maxadr;
+			   else if (stadr > adr)
+				   stadr = adr;
 			   ct++;
 		   }
 	   } while (sr->Peek() != -1);
@@ -1009,25 +1027,107 @@ int SaveAsmFile(void)
 /*==========================================================*/
 /*		Get Offset Address									*/
 /*==========================================================*/
-void GetOffsetAdr()
+void GetOffsetAdr(void)
 {
+	char* eptr;
 
+	// OffsetInFormの新しいインスタンスを生成・表示
+	OffsetInForm^ OffsetInForm1 = gcnew OffsetInForm();
+	OffsetInForm1->ShowDialog();
+
+	std::string ss = "0000";
+	if (OffsetInForm1->txtBoxOffsetIn->Text == "")
+		ofsadr = 0;
+	else {
+		MarshalString(OffsetInForm1->txtBoxOffsetIn->Text, ss);
+		ofsadr = (unsigned int)strtol(ss.c_str(), &eptr, 16);
+	}
+	//入力結果をForm1のtextBoxにセット
+	if (ss[0] == '-')	/* 負数のみ負数表示で */
+		txtBoxOfsAdr->Text = "-$" + (0x10000 - ofsadr).ToString("X4");
+	else
+		txtBoxOfsAdr->Text = "$" + ofsadr.ToString("X4");
+	return;
 }
 
 /*==========================================================*/
 /*		List Skip Area										*/
 /*==========================================================*/
-void ListSkipArea()
+void ListSkipArea(void)
 {
+	char* p, * eptr;
+	unsigned int sadr = 0, eadr = 0;
+	char* context;
 
+	// SkipAreaInFormの新しいインスタンスを生成・表示
+	SkipAreaInForm^ SkipAreaInForm1 = gcnew SkipAreaInForm();
+	SkipAreaInForm1->ShowDialog();
+
+	/* Convert to string */
+	std::string ss = "0000";
+	MarshalString(SkipAreaInForm1->txtBoxSkipAreaIn->Text, ss);
+	/* スタート、エンドアドレスを取得 */
+	p = strtok_s((char*)ss.c_str(), "-", &context);
+	if (p)
+		sadr = (int)strtol(p, &eptr, 16);
+	p = strtok_s(NULL, "-", &context);
+	if (p)
+		eadr = (int)strtol(p, &eptr, 16);
+	else
+		eadr = sadr;
+
+	if (eadr - sadr >= 32) {
+		if (MessageBox::Show("スキップ範囲が大きすぎます．\n32バイトに縮小して良いですか．", "Confirm skip area size",
+			MessageBoxButtons::YesNo, MessageBoxIcon::Asterisk) == System::Windows::Forms::DialogResult::Yes) {
+			eadr = sadr + 32 - 1;
+		}
+		else {
+			return;
+		}
+	}
+
+	/* リストボックスに追加 */
+	lstBoxSkipArea->Items->Add("$" + sadr.ToString("X4") + " - $" + eadr.ToString("X4"));
+	skpct++;
+	return;
 }
 
 /*==========================================================*/
 /*		Set Skip Area										*/
 /*==========================================================*/
-void SetSkipArea()
+void SetSkipArea(void)
 {
+	int i;
+	char* p, * eptr;
+	std::string ss;
+	char* context;
 
+	/* 項目数を取得 */
+	skpct = lstBoxSkipArea->Items->Count;
+	/* 項目数分の配列を生成 */
+	cli::array<String^>^ StrArray = gcnew cli::array<String^>(skpct);
+	/* 全項目取得 */
+	for (i = 0; i < skpct; i++) {
+		StrArray[i] = lstBoxSkipArea->Items[i]->ToString();
+	}
+	/* アドレスに変換 */
+	for (i = 0; i < skpct; i++) {
+		/* 先頭文字($)を削除して */
+		StrArray[i] = StrArray[i]->Replace("$", "");
+		/* スペースも削除して */
+		StrArray[i] = StrArray[i]->Replace(" ", "");
+		/* stringに変換してから */
+		ss = "000000000";
+		MarshalString(StrArray[i], ss);
+		/* スタート、エンドアドレスを取得 */
+		p = strtok_s((char*)ss.c_str(), "-", &context);
+		if (p)
+			sttadr[i] = (int)strtol(p, &eptr, 16);
+		p = strtok_s(NULL, "-", &context);
+		if (p)
+			endadr[i] = (int)strtol(p, &eptr, 16);
+	}
+	return;
 }
 
 /*==========================================================*/
@@ -1035,7 +1135,22 @@ void SetSkipArea()
 /*==========================================================*/
 void CheckSkipArea(void)
 {
+	int i;
 
+	inskip_s = false;
+	inskip_m = false;
+	for (i = 0; i < skpct; i++) {
+		if (adrct >= sttadr[i] && adrct <= endadr[i]) {
+			if (sttadr[i] == endadr[i]) {
+				inskip_s = true;
+				ope.oplen = 1;
+			}
+			else {
+				inskip_m = true;
+				ope.oplen = endadr[i] - sttadr[i] + 1;
+			}
+		}
+	}
 }
 
 /*==========================================================*/
@@ -1046,6 +1161,17 @@ void statusStripClear()
    toolStripStatusLabel1->Text = "";
    toolStripProgressBar1->Value = 0;
    statusStrip1->Update();		// statusStripを再描画
+}
+
+/*==========================================================*/
+/*		Convert from String^ to string						*/
+/*==========================================================*/
+void MarshalString(String^ s, std::string& os)
+{
+	using namespace Runtime::InteropServices;
+	const char* chars = (const char*)(Marshal::StringToHGlobalAnsi(s)).ToPointer();
+	os = chars;
+	Marshal::FreeHGlobal(IntPtr((void*)chars));
 }
 
 //////////////////////////////////////////////////////////////
